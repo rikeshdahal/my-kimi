@@ -1,0 +1,1377 @@
+<!DOCTYPE html>
+<!--
+  Rikesh Dahal — Portfolio Chatbot
+  Built with Fulkumari Live (TalkingHead + Gemini)
+  Author: Rikesh Dahal · rikeshdahal.com.np
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>Chat with Kimi — Rikesh Dahal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+
+<script type="importmap">
+{ "imports": {
+  "three":         "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js/+esm",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+  "talkinghead":   "https://cdn.jsdelivr.net/npm/@met4citizen/talkinghead@1.7/modules/talkinghead.mjs"
+}}
+</script>
+
+<style>
+:root {
+  --bg: #0a0a0c;
+  --surface: #111114;
+  --surface2: #18181d;
+  --border: #1e1e26;
+  --border2: #2a2a35;
+  --gold: #c9a96e;
+  --gold-dim: rgba(201,169,110,0.1);
+  --gold-glow: rgba(201,169,110,0.25);
+  --accent: #e8e4dc;
+  --muted: #52505c;
+  --muted2: #3a3845;
+  --red: #e05555;
+  --green: #5eb56a;
+  --blue: #7ab8e8;
+  --r: 14px;
+  --ease: 0.2s cubic-bezier(0.4,0,0.2,1);
+  --sat: env(safe-area-inset-top,0px);
+  --sab: env(safe-area-inset-bottom,0px);
+}
+
+*,*::before,*::after { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body { height:100%; height:100dvh; overflow:hidden; }
+body {
+  font-family:'Space Mono',monospace;
+  background:var(--bg);
+  color:var(--accent);
+  display:flex; flex-direction:column;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ── ANIMATIONS ── */
+@keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+@keyframes spin { to{transform:rotate(360deg)} }
+@keyframes fadeUp { from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)} }
+@keyframes blink { 0%,100%{opacity:1}50%{opacity:0} }
+@keyframes glow { 0%,100%{box-shadow:0 0 20px var(--gold-glow)}50%{box-shadow:0 0 40px var(--gold-glow),0 0 60px rgba(201,169,110,0.1)} }
+@keyframes slideDown { from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)} }
+@keyframes shimmer { from{background-position:-200% 0}to{background-position:200% 0} }
+@keyframes callPulse { 0%,100%{transform:scale(1);box-shadow:0 0 0 0 var(--gold-glow)}50%{transform:scale(1.02);box-shadow:0 0 0 8px rgba(201,169,110,0)} }
+
+/* ── API GATE ── */
+#api-gate {
+  position:fixed;inset:0;z-index:999;background:var(--bg);
+  display:flex;align-items:center;justify-content:center;padding:20px;
+}
+#api-gate.gone { display:none; }
+.gate-card {
+  width:100%;max-width:400px;
+  border:1px solid var(--border2);border-radius:20px;
+  background:var(--surface);
+  padding:32px 28px 24px;
+  display:flex;flex-direction:column;gap:20px;
+}
+.gate-logo-row { display:flex;align-items:center;gap:12px; }
+.gate-avatar-sm {
+  width:40px;height:40px;border-radius:50%;
+  border:1.5px solid var(--gold);overflow:hidden;
+  background:var(--surface2);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+}
+.gate-avatar-sm img { width:100%;height:100%;object-fit:cover; }
+.gate-brand { font-family:'Syne',sans-serif;font-weight:700;font-size:16px;letter-spacing:.02em; }
+.gate-brand span { color:var(--gold); }
+.gate-subtitle { font-size:10px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-top:2px; }
+.gate-desc { font-size:11px;line-height:1.8;color:var(--muted); }
+.gate-desc a { color:var(--gold);text-decoration:none; }
+.gate-label { font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:7px;display:block; }
+.gate-input-wrap { position:relative; }
+.gate-input {
+  width:100%;padding:13px 44px 13px 14px;
+  font-family:'Space Mono',monospace;font-size:13px;
+  background:var(--surface2);color:var(--accent);
+  border:1px solid var(--border2);border-radius:10px;
+  outline:none;transition:border-color var(--ease);
+}
+.gate-input:focus { border-color:rgba(201,169,110,.5); }
+.gate-eye {
+  position:absolute;right:12px;top:50%;transform:translateY(-50%);
+  background:none;border:none;cursor:pointer;color:var(--muted);padding:6px;
+}
+.gate-eye:hover { color:var(--gold); }
+.gate-err { font-size:10px;color:var(--red);display:none;margin-top:-10px; }
+.gate-btn {
+  padding:14px;width:100%;
+  font-family:'Syne',sans-serif;font-size:13px;font-weight:700;letter-spacing:.08em;
+  background:var(--gold);color:#0a0a0c;border:none;border-radius:10px;
+  cursor:pointer;transition:all var(--ease);
+}
+.gate-btn:hover { opacity:.88;transform:translateY(-1px); }
+.gate-note { font-size:9px;color:var(--muted);text-align:center;line-height:1.7; }
+.gate-note a { color:var(--gold);text-decoration:none; }
+
+/* ── HEADER ── */
+header {
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 20px;
+  padding-top:calc(14px + var(--sat));
+  border-bottom:1px solid var(--border);
+  background:rgba(10,10,12,.96);
+  backdrop-filter:blur(16px);
+  -webkit-backdrop-filter:blur(16px);
+  flex-shrink:0;z-index:50;
+}
+.h-left { display:flex;align-items:center;gap:12px; }
+.avatar-ring {
+  width:38px;height:38px;border-radius:50%;
+  border:1.5px solid var(--gold);
+  background:var(--surface2);overflow:hidden;flex-shrink:0;
+  position:relative;
+}
+.avatar-ring img { width:100%;height:100%;object-fit:cover; }
+.avatar-ring .live-dot {
+  position:absolute;bottom:1px;right:1px;
+  width:9px;height:9px;border-radius:50%;
+  background:var(--green);border:1.5px solid var(--bg);
+  display:none;
+}
+.avatar-ring .live-dot.show { display:block;animation:pulse 2s infinite; }
+.h-name { font-family:'Syne',sans-serif;font-weight:700;font-size:14px; }
+.h-role { font-size:9px;color:var(--muted);letter-spacing:.1em;margin-top:2px; }
+.h-right { display:flex;align-items:center;gap:8px; }
+.status-badge {
+  font-size:8px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);padding:4px 10px;
+  border:1px solid var(--border);border-radius:20px;
+  transition:all var(--ease);white-space:nowrap;
+}
+.status-badge.online { color:var(--green);border-color:rgba(94,181,106,.4);background:rgba(94,181,106,.07); }
+.status-badge.calling { color:var(--gold);border-color:rgba(201,169,110,.4);background:var(--gold-dim); }
+
+/* ── CALL BUTTON ── */
+#call-kimi-btn {
+  display:flex;align-items:center;gap:7px;
+  padding:8px 14px;
+  background:var(--gold-dim);
+  border:1px solid rgba(201,169,110,.4);
+  border-radius:30px;cursor:pointer;
+  font-family:'Syne',sans-serif;font-weight:600;font-size:11px;
+  color:var(--gold);letter-spacing:.04em;
+  transition:all var(--ease);
+  animation:callPulse 3s ease-in-out infinite;
+}
+#call-kimi-btn:hover { background:rgba(201,169,110,.2);border-color:var(--gold);animation:none; }
+#call-kimi-btn svg { width:13px;height:13px;flex-shrink:0; }
+
+/* ── CHAT AREA ── */
+.chat-wrap {
+  flex:1;display:flex;flex-direction:column;
+  overflow:hidden;min-height:0;
+  position:relative;
+}
+
+/* subtle grid bg */
+.chat-wrap::before {
+  content:'';position:absolute;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(rgba(201,169,110,.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(201,169,110,.025) 1px,transparent 1px);
+  background-size:40px 40px;
+}
+
+#messages {
+  flex:1;overflow-y:auto;
+  padding:20px 16px;
+  display:flex;flex-direction:column;gap:16px;
+  position:relative;z-index:1;
+}
+#messages::-webkit-scrollbar { width:3px; }
+#messages::-webkit-scrollbar-thumb { background:var(--muted2);border-radius:3px; }
+
+/* ── WELCOME CARD ── */
+.welcome-card {
+  background:var(--surface);
+  border:1px solid var(--border2);
+  border-radius:var(--r);
+  padding:20px;
+  animation:fadeUp .4s ease;
+  position:relative;overflow:hidden;
+}
+.welcome-card::before {
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--gold),transparent);
+}
+.wc-top { display:flex;align-items:center;gap:12px;margin-bottom:14px; }
+.wc-avatar {
+  width:48px;height:48px;border-radius:50%;
+  border:2px solid var(--gold);overflow:hidden;flex-shrink:0;
+}
+.wc-avatar img { width:100%;height:100%;object-fit:cover; }
+.wc-name { font-family:'Syne',sans-serif;font-weight:700;font-size:16px; }
+.wc-sub { font-size:9px;color:var(--gold);letter-spacing:.14em;text-transform:uppercase;margin-top:3px; }
+.wc-text { font-size:11px;line-height:1.9;color:#a0a0b5;margin-bottom:16px; }
+.wc-chips { display:flex;flex-wrap:wrap;gap:6px; }
+.chip {
+  padding:6px 12px;font-size:10px;letter-spacing:.06em;
+  border:1px solid var(--border2);border-radius:20px;
+  background:var(--surface2);color:var(--muted);
+  cursor:pointer;transition:all var(--ease);
+}
+.chip:hover { border-color:var(--gold);color:var(--gold);background:var(--gold-dim); }
+
+/* ── MESSAGE BUBBLES ── */
+.msg {
+  display:flex;gap:10px;align-items:flex-start;
+  animation:fadeUp .25s ease;
+  max-width:100%;
+}
+.msg.user { flex-direction:row-reverse; }
+.msg-avatar {
+  width:30px;height:30px;border-radius:50%;flex-shrink:0;
+  border:1px solid var(--border2);overflow:hidden;
+  background:var(--surface2);
+  display:flex;align-items:center;justify-content:center;
+  font-size:12px;color:var(--muted);font-weight:700;
+  margin-top:2px;
+}
+.msg-avatar img { width:100%;height:100%;object-fit:cover; }
+.msg-body { max-width:calc(100% - 46px); }
+.msg-name {
+  font-size:8px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:5px;
+}
+.msg.user .msg-name { text-align:right;color:var(--muted); }
+.bubble {
+  padding:12px 15px;border-radius:14px;
+  font-size:12px;line-height:1.85;
+  position:relative;word-break:break-word;
+}
+.msg.ai .bubble {
+  background:var(--surface);
+  border:1px solid var(--border2);
+  border-radius:3px 14px 14px 14px;
+  color:var(--accent);
+}
+.msg.user .bubble {
+  background:var(--gold-dim);
+  border:1px solid rgba(201,169,110,.3);
+  border-radius:14px 3px 14px 14px;
+  color:var(--accent);
+}
+
+/* typing cursor */
+.typing-cursor {
+  display:inline-block;width:2px;height:13px;
+  background:var(--gold);margin-left:2px;vertical-align:middle;
+  animation:blink .7s infinite;
+}
+
+/* typing dots */
+.typing-dots { display:flex;gap:4px;align-items:center;padding:4px 0; }
+.typing-dots span {
+  width:5px;height:5px;border-radius:50%;background:var(--muted);
+  animation:pulse .9s ease-in-out infinite;
+}
+.typing-dots span:nth-child(2) { animation-delay:.2s; }
+.typing-dots span:nth-child(3) { animation-delay:.4s; }
+
+/* ── FOOTER INPUT ── */
+footer {
+  padding:12px 16px;
+  padding-bottom:calc(12px + var(--sab));
+  border-top:1px solid var(--border);
+  background:rgba(10,10,12,.97);
+  backdrop-filter:blur(16px);
+  -webkit-backdrop-filter:blur(16px);
+  flex-shrink:0;position:relative;z-index:2;
+}
+.input-row {
+  display:flex;gap:8px;align-items:flex-end;
+  max-width:760px;margin:0 auto;
+}
+#user-input {
+  flex:1;padding:12px 16px;
+  font-family:'Space Mono',monospace;font-size:12px;
+  background:var(--surface);color:var(--accent);
+  border:1px solid var(--border2);border-radius:12px;
+  outline:none;resize:none;
+  line-height:1.6;max-height:120px;
+  transition:border-color var(--ease);
+}
+#user-input:focus { border-color:rgba(201,169,110,.5); }
+#user-input::placeholder { color:var(--muted); }
+.send-btn {
+  width:44px;height:44px;flex-shrink:0;
+  background:var(--gold);border:none;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;color:#0a0a0c;
+  transition:all var(--ease);
+}
+.send-btn:hover:not(:disabled) { opacity:.85;transform:translateY(-1px); }
+.send-btn:disabled { opacity:.3;cursor:not-allowed; }
+.send-btn svg { width:16px;height:16px; }
+.footer-hint { text-align:center;font-size:9px;color:var(--muted2);margin-top:8px;letter-spacing:.08em; }
+
+/* ── AVATAR MODAL / CALL SCREEN ── */
+#call-modal {
+  position:fixed;inset:0;z-index:900;
+  background:var(--bg);
+  display:none;flex-direction:column;
+}
+#call-modal.active { display:flex; }
+
+.call-header {
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 20px;padding-top:calc(14px + var(--sat));
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;background:rgba(10,10,12,.97);
+}
+.call-h-left { display:flex;align-items:center;gap:10px; }
+.call-dot { width:8px;height:8px;border-radius:50%;background:var(--gold);animation:pulse 2s infinite; }
+.call-title { font-family:'Syne',sans-serif;font-weight:700;font-size:14px; }
+.call-title span { color:var(--gold); }
+.call-timer { font-size:11px;color:var(--muted);font-family:'Space Mono',monospace; }
+.end-call-btn {
+  display:flex;align-items:center;gap:6px;
+  padding:9px 16px;
+  background:rgba(224,85,85,.1);
+  border:1px solid rgba(224,85,85,.4);
+  border-radius:8px;cursor:pointer;
+  font-family:'Syne',sans-serif;font-weight:600;font-size:11px;
+  color:var(--red);letter-spacing:.04em;
+  transition:all var(--ease);
+}
+.end-call-btn:hover { background:rgba(224,85,85,.18); }
+.end-call-btn svg { width:13px;height:13px; }
+
+/* avatar area */
+.call-body { flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0; }
+.avatar-stage {
+  flex:1;position:relative;overflow:hidden;min-height:0;
+  background:#060608;
+}
+.avatar-stage::after {
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.04) 2px,rgba(0,0,0,.04) 4px);
+}
+#call-avatar-el { display:block;width:100%;height:100%; }
+
+/* overlay inside avatar stage */
+#call-overlay {
+  position:absolute;inset:0;z-index:20;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+  background:#060608;transition:opacity .4s;
+}
+#call-overlay.hidden { opacity:0;pointer-events:none; }
+.call-loader { width:36px;height:36px;border:2px solid var(--border2);border-top-color:var(--gold);border-radius:50%;animation:spin .9s linear infinite; }
+.call-load-lbl { font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted); }
+.call-load-bar-wrap { width:140px;height:2px;background:var(--border2);border-radius:2px;overflow:hidden; }
+.call-load-bar { height:100%;width:0%;background:var(--gold);border-radius:2px;transition:width .25s; }
+
+/* speaking ring */
+.call-ring {
+  position:absolute;inset:-2px;z-index:5;border-radius:0;
+  border:2px solid transparent;pointer-events:none;
+  transition:border-color .3s,box-shadow .3s;
+}
+.call-ring.active {
+  border-color:rgba(201,169,110,.4);
+  box-shadow:0 0 30px rgba(201,169,110,.15),inset 0 0 30px rgba(201,169,110,.04);
+}
+
+/* live badge */
+.call-live {
+  position:absolute;top:14px;left:16px;z-index:30;
+  display:flex;align-items:center;gap:6px;
+  font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);
+  opacity:0;transition:opacity .3s;
+}
+.call-live.show { opacity:1; }
+.call-live::before { content:'';width:6px;height:6px;border-radius:50%;background:var(--gold);animation:pulse 2s infinite; }
+
+/* timer badge in stage */
+.call-timer-badge {
+  position:absolute;top:14px;right:16px;z-index:30;
+  font-size:9px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);padding:4px 10px;
+  border:1px solid var(--border);border-radius:4px;
+  background:rgba(6,6,8,.8);font-family:'Space Mono',monospace;
+}
+
+/* subtitles in call */
+#call-subs {
+  position:absolute;bottom:8%;left:50%;transform:translateX(-50%);
+  width:86%;text-align:center;z-index:30;
+  font-family:'Space Mono',monospace;
+  font-size:clamp(11px,3vw,14px);
+  font-weight:400;line-height:1.5;color:#fff;
+  text-shadow:0 2px 12px rgba(0,0,0,.95);
+  pointer-events:none;min-height:2em;
+}
+
+/* call footer controls */
+.call-footer {
+  padding:16px 20px;padding-bottom:calc(16px + var(--sab));
+  border-top:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;gap:12px;
+  flex-shrink:0;background:rgba(10,10,12,.97);
+}
+.ctrl-btn {
+  display:flex;flex-direction:column;align-items:center;gap:5px;
+  background:var(--surface2);border:1px solid var(--border2);
+  border-radius:12px;padding:10px 16px;cursor:pointer;
+  transition:all var(--ease);color:var(--muted);min-width:60px;
+}
+.ctrl-btn:hover:not(:disabled) { border-color:var(--gold);color:var(--gold); }
+.ctrl-btn:disabled { opacity:.25;cursor:not-allowed; }
+.ctrl-btn.muted { color:var(--red);border-color:rgba(224,85,85,.4); }
+.ctrl-btn svg { width:18px;height:18px; }
+.ctrl-btn span { font-size:8px;letter-spacing:.1em;text-transform:uppercase; }
+.ctrl-end {
+  background:rgba(224,85,85,.12);
+  border:1px solid rgba(224,85,85,.4);
+  color:var(--red);
+}
+.ctrl-end:hover { background:rgba(224,85,85,.22) !important;border-color:var(--red) !important;color:var(--red) !important; }
+
+/* timeout warning */
+#timeout-bar-wrap {
+  height:2px;background:transparent;flex-shrink:0;
+  transition:background .3s;
+}
+#timeout-bar {
+  height:100%;width:100%;background:var(--gold);
+  transition:width 1s linear,background 1s;
+  transform-origin:left;
+}
+
+/* ── CAMERA PIP (picture-in-picture inside call) ── */
+.cam-pip {
+  position:absolute;bottom:16px;left:16px;z-index:40;
+  width:110px;height:70px;
+  border-radius:10px;overflow:hidden;
+  border:1.5px solid var(--border2);
+  background:#000;
+  box-shadow:0 4px 20px rgba(0,0,0,.6);
+  transition:opacity .3s;
+}
+.cam-pip video {
+  width:100%;height:100%;object-fit:cover;display:block;
+  opacity:0;transition:opacity .4s;
+}
+.cam-pip video.active { opacity:1; }
+.cam-pip-off {
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:4px;
+  font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2);
+  pointer-events:none;
+}
+.cam-pip-off svg { width:16px;height:16px;opacity:.4; }
+.cam-pip-off.hidden { display:none; }
+.cam-pip-rec {
+  position:absolute;top:5px;right:6px;z-index:2;
+  display:none;align-items:center;gap:3px;
+  font-size:7px;letter-spacing:.1em;color:var(--red);font-family:'Space Mono',monospace;
+}
+.cam-pip-rec::before { content:'';width:5px;height:5px;border-radius:50%;background:var(--red);animation:pulse 1s infinite; }
+.cam-pip-rec.show { display:flex; }
+.ctrl-btn.cam-active { color:var(--blue);border-color:rgba(122,184,232,.4); }
+
+/* ── API KEY GATE inside call modal ── */
+#call-key-gate {
+  position:absolute;inset:0;z-index:50;
+  background:var(--bg);display:none;
+  flex-direction:column;align-items:center;justify-content:center;padding:20px;
+}
+#call-key-gate.show { display:flex; }
+
+/* ── TOASTS ── */
+#toast {
+  position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
+  z-index:990;
+  font-size:10px;color:var(--red);letter-spacing:.04em;
+  background:rgba(10,10,12,.97);border:1px solid rgba(224,85,85,.3);
+  border-radius:8px;padding:10px 18px;
+  display:none;max-width:calc(100vw - 40px);text-align:center;
+}
+
+/* ── RESPONSIVE ── */
+@media (min-width:600px) {
+  #messages { padding:24px 24px; }
+  .bubble { font-size:13px; }
+  .wc-text { font-size:12px; }
+  header { padding:16px 24px; }
+  footer { padding:14px 24px;padding-bottom:calc(14px + var(--sab)); }
+}
+</style>
+</head>
+<body>
+
+<!-- ── API GATE ── -->
+<div id="api-gate">
+  <div class="gate-card">
+    <div class="gate-logo-row">
+      <div class="gate-avatar-sm">
+        <img src="https://i.postimg.cc/5tTNWYqp/rd.png" alt="Rikesh"/>
+      </div>
+      <div>
+        <div class="gate-brand">RIKESH <span>AI</span></div>
+        <div class="gate-subtitle">Portfolio Chatbot</div>
+      </div>
+    </div>
+    <div class="gate-desc">
+      Chat with Kimi — Rikesh's AI assistant. Enter your
+      <a href="https://aistudio.google.com/app/apikey" target="_blank">Gemini API key</a>
+      to start. Your key stays only in browser memory.
+    </div>
+    <div>
+      <span class="gate-label">Gemini API Key</span>
+      <div class="gate-input-wrap">
+        <input id="gate-key" class="gate-input" type="password"
+               placeholder="AIzaSy…" autocomplete="off" spellcheck="false"/>
+        <button class="gate-eye" id="gate-eye" title="Show/hide">
+          <svg id="eye-svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+      </div>
+      <div id="gate-err" class="gate-err" style="margin-top:8px;">Please enter a valid key (starts with AIza…)</div>
+    </div>
+    <button class="gate-btn" id="gate-submit">Start Chatting →</button>
+    <div class="gate-note">
+      Closing the tab clears your key. Free key at
+      <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com</a>
+    </div>
+  </div>
+</div>
+
+<!-- ── HEADER ── -->
+<header>
+  <div class="h-left">
+    <div class="avatar-ring">
+      <img src="https://i.postimg.cc/5tTNWYqp/rd.png" alt="Rikesh"/>
+      <div class="live-dot" id="hdr-live-dot"></div>
+    </div>
+    <div>
+      <div class="h-name">Rikesh Dahal</div>
+      <div class="h-role">Data Engineer · Full-Stack Dev</div>
+    </div>
+  </div>
+  <div class="h-right">
+    <div class="status-badge online" id="status-badge">online</div>
+    <button id="call-kimi-btn" title="Start voice call with Kimi">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.59 3.39 2 2 0 0 1 3.56 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.74a16 16 0 0 0 6 6l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+      </svg>
+      Call Kimi
+    </button>
+  </div>
+</header>
+
+<!-- ── CHAT ── -->
+<div class="chat-wrap">
+  <div id="messages">
+    <!-- welcome card injected by JS -->
+  </div>
+</div>
+
+<!-- ── INPUT ── -->
+<footer>
+  <div class="input-row">
+    <textarea id="user-input" rows="1" placeholder="Ask me anything about Rikesh…"></textarea>
+    <button class="send-btn" id="send-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="22" y1="2" x2="11" y2="13"/>
+        <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+      </svg>
+    </button>
+  </div>
+  <div class="footer-hint">Powered by Gemini · Kimi knows everything about Rikesh</div>
+</footer>
+
+<!-- ── CALL MODAL ── -->
+<div id="call-modal">
+  <!-- key gate if not set -->
+  <div id="call-key-gate">
+    <div class="gate-card">
+      <div class="gate-logo-row">
+        <div class="gate-avatar-sm">
+          <img src="https://i.postimg.cc/5tTNWYqp/rd.png" alt="Rikesh"/>
+        </div>
+        <div>
+          <div class="gate-brand">CALL <span>KIMI</span></div>
+          <div class="gate-subtitle">Voice Session</div>
+        </div>
+      </div>
+      <div class="gate-desc">Enter your Gemini API key to start a voice call with Kimi.</div>
+      <div>
+        <span class="gate-label">Gemini API Key</span>
+        <div class="gate-input-wrap">
+          <input id="call-gate-key" class="gate-input" type="password" placeholder="AIzaSy…"/>
+          <button class="gate-eye" id="call-gate-eye">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <button class="gate-btn" id="call-gate-submit">Start Call →</button>
+      <button class="gate-btn" id="call-gate-cancel" style="background:transparent;color:var(--muted);border:1px solid var(--border2);margin-top:-8px;">Cancel</button>
+    </div>
+  </div>
+
+  <div id="timeout-bar-wrap"><div id="timeout-bar"></div></div>
+  <div class="call-header">
+    <div class="call-h-left">
+      <div class="call-dot"></div>
+      <div>
+        <div class="call-title">KIMI <span>LIVE</span></div>
+        <div class="call-timer" id="call-timer-hdr">connecting…</div>
+      </div>
+    </div>
+    <button class="end-call-btn" id="end-call-hdr">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.42 19.42 0 0 1 4.69 12 19.79 19.79 0 0 1 1.59 3.39 2 2 0 0 1 3.56 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.74"/>
+        <line x1="1" y1="1" x2="23" y2="23"/>
+      </svg>
+      End Call
+    </button>
+  </div>
+
+  <div class="call-body">
+    <div class="avatar-stage">
+      <div id="call-avatar-el"></div>
+      <div class="call-ring" id="call-ring"></div>
+      <div class="call-live" id="call-live">Live</div>
+      <div class="call-timer-badge" id="call-timer-badge">10:00</div>
+      <div id="call-subs"></div>
+      <div id="call-overlay">
+        <div id="co-pre" style="display:flex;flex-direction:column;align-items:center;gap:14px">
+          <div class="call-loader"></div>
+          <div class="call-load-bar-wrap"><div class="call-load-bar" id="call-load-bar"></div></div>
+          <div class="call-load-lbl" id="call-load-lbl">Initialising…</div>
+        </div>
+      </div>
+
+      <!-- Camera PIP -->
+      <div class="cam-pip" id="cam-pip">
+        <video id="cam-video" autoplay playsinline muted></video>
+        <div class="cam-pip-off" id="cam-pip-off">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+          </svg>
+          <span>cam off</span>
+        </div>
+        <div class="cam-pip-rec" id="cam-pip-rec">REC</div>
+      </div>
+      <!-- hidden canvas for frame capture -->
+      <canvas id="cam-canvas" style="display:none"></canvas>
+    </div>
+
+    <div class="call-footer">
+      <button class="ctrl-btn" id="ctrl-mute" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" x2="12" y1="19" y2="22"/>
+        </svg>
+        <span id="mute-label">Mic On</span>
+      </button>
+      <button class="ctrl-btn" id="ctrl-cam" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+        </svg>
+        <span id="cam-label">Camera</span>
+      </button>
+      <button class="ctrl-btn" id="ctrl-snap" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+          <circle cx="12" cy="13" r="4"/>
+        </svg>
+        <span>Snapshot</span>
+      </button>
+      <button class="ctrl-btn ctrl-end" id="ctrl-end">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.42 19.42 0 0 1 4.69 12 19.79 19.79 0 0 1 1.59 3.39 2 2 0 0 1 3.56 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.74"/>
+          <line x1="1" y1="1" x2="23" y2="23"/>
+        </svg>
+        <span>End Call</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- ── MAIN SCRIPT ── -->
+<script type="module">
+import { GoogleGenAI, Modality } from 'https://esm.sh/@google/genai';
+import { TalkingHead } from 'talkinghead';
+
+/* ═══ CONSTANTS ═══ */
+const CALL_DURATION   = 10 * 60 * 1000; // 10 min
+const MIC_RATE        = 16000;
+const OUT_RATE        = 24000;
+const STREAM_END_DLY  = 350;
+const QUEUE_POLL      = 16;
+const FRAME_SAMP      = Math.round(OUT_RATE * 0.020);
+const OPEN_VISEMES    = ['aa','E','O','I','aa','E'];
+
+/* ═══ PORTFOLIO DATA ═══ */
+const RIKESH_INFO = `
+You are Kimi, the AI assistant for Rikesh Dahal's portfolio website.
+You have deep knowledge about Rikesh and answer questions about him naturally and warmly.
+
+ABOUT RIKESH DAHAL:
+- Full Name: Rikesh Dahal
+- From: Sinamangal, Kathmandu, Nepal
+- Currently: BCA student at Patan College
+- Status: Open to Work / Available for Freelance
+- Phone: +977 9841255549
+- Email: contact@rikeshdahal.com.np
+- Website: https://rikeshdahal.com.np
+- GitHub: https://github.com/rikeshdahal
+- Fun fact: "Programmers often don't have girlfriends, but I do ;)"
+
+SKILLS & EXPERTISE:
+- Data Engineering: Databricks, PySpark, Pandas, MySQL, ETL/ELT pipelines
+- Web Development: Django REST API (Django DRF), Full-Stack
+- App Development: Mobile/Web apps
+- Game Development: Building a game called "Bhaire"
+- 3D Modeling & Graphic Design
+- Ethical Hacking / Cybersecurity
+- Languages/Tech: Python, JavaScript, HTML/CSS
+
+EXPERIENCE:
+- 2-month internship at Insight Workshop (specialised in Django DRF and Data Engineering)
+- 3+ years of experience
+- 10+ clients & collaborators
+- 25+ projects
+
+PROJECTS & STATS:
+- 6+ major projects
+- 13+ skills
+- 6+ blog posts
+- 5-star average rating
+- 24/7 support for clients
+
+DATA ENGINEERING (Professional Focus):
+- Builds robust data pipelines
+- Transforms raw data into actionable insights
+- Uses modern data stack: Databricks, PySpark, Pandas, MySQL
+- Experience with ETL/ELT architecture
+- Learning Goals: Master Databricks, Lakehouse architecture, Delta Lake
+
+GOALS & ASPIRATIONS (Bucket List):
+- Learn Rust (systems programming)
+- Contribute to Open Source
+- Master Databricks (go deeper into lakehouse & Delta Lake)
+- Publish "Bhaire" game on a public platform
+
+FULKUMARI LIVE (Open Source Project):
+- Built by Rikesh Dahal
+- Live voice + vision AI avatar (Google Gemini + TalkingHead + Three.js)
+- GitHub: https://github.com/rikeshdahal/fulkumari-live
+- Open source with attribution required
+
+SERVICES OFFERED:
+- Data Pipelines
+- ETL / ELT
+- Web Development
+- Django REST API
+- Game Development
+- UI/UX Design
+- Freelance projects
+
+CONTACT:
+- Location: Sinamangal, Kathmandu, Nepal
+- Available for: freelance projects, collaborations, internship opportunities
+- Usually responds within 24 hours
+- Free consultation available
+
+PERSONALITY: Rikesh is passionate, creative, a devotee of Radha Krishna (plays Hare Krishna mantra while working), loves tech, gaming, and building things. He is open, friendly, and hardworking.
+
+YOUR ROLE AS KIMI:
+- Be warm, helpful, and represent Rikesh professionally
+- Answer questions about Rikesh's skills, projects, experience, and availability
+- Help visitors understand if Rikesh is right for their project
+- Encourage them to reach out via contact page or +977 9841255549
+- If asked about things you don't know, say you'll have to ask Rikesh directly
+- Keep responses concise and friendly in TEXT chat mode
+- You were created by Rikesh Dahal
+- Your name is Kimi
+`;
+
+/* ═══ STATE ═══ */
+let API_KEY = '';
+let chatHistory = [];
+
+/* call state */
+let callActive = false, callMuted = false;
+let head = null, session = null, isConnected = false;
+let avatarInited = false, avatarReady = false;
+let streamActive = false, streamTimeMs = 0, openVisemeCtr = 0;
+let audioQueue = [], queueRunning = false, streamCloseTimer = null;
+let subTimers = [];
+let micCtx = null, micStream = null, micNode = null, micWorkletLoaded = false;
+let partialUserText = '', partialAIEl = null, pendingText = '';
+let callStartTime = 0, callTimerInterval = null, callTimeoutTimer = null;
+let isTyping = false;
+
+/* ═══ DOM ═══ */
+const $gate        = document.getElementById('api-gate');
+const $gateKey     = document.getElementById('gate-key');
+const $gateSubmit  = document.getElementById('gate-submit');
+const $gateErr     = document.getElementById('gate-err');
+const $gateEye     = document.getElementById('gate-eye');
+const $eyeSvg      = document.getElementById('eye-svg');
+const $messages    = document.getElementById('messages');
+const $input       = document.getElementById('user-input');
+const $sendBtn     = document.getElementById('send-btn');
+const $callBtn     = document.getElementById('call-kimi-btn');
+const $callModal   = document.getElementById('call-modal');
+const $callKeyGate = document.getElementById('call-key-gate');
+const $callGateKey = document.getElementById('call-gate-key');
+const $callGateSub = document.getElementById('call-gate-submit');
+const $callGateCan = document.getElementById('call-gate-cancel');
+const $toast       = document.getElementById('toast');
+const $statusBadge = document.getElementById('status-badge');
+const $liveHdr     = document.getElementById('hdr-live-dot');
+const $callTimerH  = document.getElementById('call-timer-hdr');
+const $callTimerB  = document.getElementById('call-timer-badge');
+const $ring        = document.getElementById('call-ring');
+const $callLive    = document.getElementById('call-live');
+const $callSubs    = document.getElementById('call-subs');
+const $callOverlay = document.getElementById('call-overlay');
+const $loadBar     = document.getElementById('call-load-bar');
+const $loadLbl     = document.getElementById('call-load-lbl');
+const $ctrlMute    = document.getElementById('ctrl-mute');
+const $ctrlEnd     = document.getElementById('ctrl-end');
+const $endCallHdr  = document.getElementById('end-call-hdr');
+const $timeoutBar  = document.getElementById('timeout-bar');
+const $muteLabel   = document.getElementById('mute-label');
+
+/* ═══ API GATE ═══ */
+$gateEye.addEventListener('click', () => {
+  const show = $gateKey.type === 'password';
+  $gateKey.type = show ? 'text' : 'password';
+});
+function submitGate() {
+  const k = $gateKey.value.trim();
+  if (!k || !k.startsWith('AIza')) { $gateErr.style.display = 'block'; return; }
+  $gateErr.style.display = 'none';
+  API_KEY = k;
+  try { sessionStorage.setItem('rd_api_key', k); } catch {}
+  $gate.classList.add('gone');
+  renderWelcome();
+}
+$gateSubmit.addEventListener('click', submitGate);
+$gateKey.addEventListener('keydown', e => { if (e.key === 'Enter') submitGate(); });
+
+(function restoreKey() {
+  try {
+    const s = sessionStorage.getItem('rd_api_key');
+    if (s && s.startsWith('AIza')) { API_KEY = s; $gate.classList.add('gone'); renderWelcome(); }
+  } catch {}
+})();
+
+/* call gate */
+document.getElementById('call-gate-eye').addEventListener('click', () => {
+  $callGateKey.type = $callGateKey.type === 'password' ? 'text' : 'password';
+});
+$callGateSub.addEventListener('click', () => {
+  const k = $callGateKey.value.trim();
+  if (!k || !k.startsWith('AIza')) { showToast('Invalid API key'); return; }
+  API_KEY = k;
+  try { sessionStorage.setItem('rd_api_key', k); } catch {}
+  $callKeyGate.classList.remove('show');
+  startCallSession();
+});
+$callGateCan.addEventListener('click', () => { $callModal.classList.remove('active'); $callKeyGate.classList.remove('show'); });
+
+/* ═══ UTILS ═══ */
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let toastTmr;
+function showToast(msg, ms = 5000) {
+  $toast.textContent = msg; $toast.style.display = 'block';
+  clearTimeout(toastTmr); toastTmr = setTimeout(() => $toast.style.display = 'none', ms);
+}
+function fmtTime(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+}
+function showSub(t) { $callSubs.textContent = t ? t.slice(-120) : ''; }
+function setLoadPct(p, l) { $loadBar.style.width = Math.min(100, p) + '%'; if (l) $loadLbl.textContent = l; }
+function hideCallOverlay() { $callOverlay.classList.add('hidden'); }
+
+/* ═══ WELCOME CARD ═══ */
+function renderWelcome() {
+  $messages.innerHTML = '';
+  const card = document.createElement('div');
+  card.className = 'welcome-card';
+  card.innerHTML = `
+    <div class="wc-top">
+      <div class="wc-avatar"><img src="https://i.postimg.cc/5tTNWYqp/rd.png" alt="Rikesh"/></div>
+      <div>
+        <div class="wc-name">Hey! I'm Kimi 👋</div>
+        <div class="wc-sub">Rikesh's AI Assistant</div>
+      </div>
+    </div>
+    <p class="wc-text">
+      I know everything about <strong>Rikesh Dahal</strong> — his skills, projects, experience, and how to work with him.<br>
+      Ask me anything, or hit <strong>Call Kimi</strong> above for a live voice conversation!
+    </p>
+    <div class="wc-chips">
+      <div class="chip" data-q="What are Rikesh's main skills?">🛠 Skills</div>
+      <div class="chip" data-q="Tell me about Rikesh's projects">🚀 Projects</div>
+      <div class="chip" data-q="What is Rikesh's work experience?">💼 Experience</div>
+      <div class="chip" data-q="How can I hire Rikesh?">📩 Hire Him</div>
+      <div class="chip" data-q="What is Fulkumari Live?">🤖 Fulkumari</div>
+      <div class="chip" data-q="Tell me about Rikesh's data engineering work">📊 Data Eng</div>
+    </div>
+  `;
+  $messages.appendChild(card);
+  card.querySelectorAll('.chip').forEach(c => {
+    c.addEventListener('click', () => sendMessage(c.dataset.q));
+  });
+}
+
+/* ═══ CHAT MESSAGES ═══ */
+function appendUserMsg(text) {
+  const div = document.createElement('div');
+  div.className = 'msg user';
+  div.innerHTML = `
+    <div class="msg-avatar">U</div>
+    <div class="msg-body">
+      <div class="msg-name">You</div>
+      <div class="bubble">${escHtml(text)}</div>
+    </div>`;
+  $messages.appendChild(div);
+  $messages.scrollTop = $messages.scrollHeight;
+}
+
+function showTypingIndicator() {
+  removeTypingIndicator();
+  const div = document.createElement('div');
+  div.className = 'msg ai'; div.id = 'typing-ind';
+  div.innerHTML = `
+    <div class="msg-avatar"><img src="https://i.postimg.cc/5tTNWYqp/rd.png" alt="Kimi"/></div>
+    <div class="msg-body">
+      <div class="msg-name">Kimi</div>
+      <div class="bubble"><div class="typing-dots"><span></span><span></span><span></span></div></div>
+    </div>`;
+  $messages.appendChild(div);
+  $messages.scrollTop = $messages.scrollHeight;
+}
+
+function removeTypingIndicator() {
+  document.getElementById('typing-ind')?.remove();
+}
+
+function appendAIMsg(text) {
+  removeTypingIndicator();
+  const div = document.createElement('div');
+  div.className = 'msg ai';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  div.innerHTML = `
+    <div class="msg-avatar"><img src="https://i.postimg.cc/5tTNWYqp/rd.png" alt="Kimi"/></div>
+    <div class="msg-body">
+      <div class="msg-name">Kimi</div>
+    </div>`;
+  div.querySelector('.msg-body').appendChild(bubble);
+  $messages.appendChild(div);
+
+  // typing animation
+  let i = 0;
+  const cursor = document.createElement('span');
+  cursor.className = 'typing-cursor';
+  bubble.appendChild(cursor);
+
+  function type() {
+    if (i < text.length) {
+      cursor.before(text[i++]);
+      $messages.scrollTop = $messages.scrollHeight;
+      setTimeout(type, Math.random() * 18 + 8);
+    } else {
+      cursor.remove();
+      $messages.scrollTop = $messages.scrollHeight;
+    }
+  }
+  type();
+}
+
+function escHtml(t) {
+  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+/* ═══ GEMINI TEXT CHAT ═══ */
+async function sendMessage(text) {
+  if (!text?.trim() || isTyping) return;
+  if (!API_KEY) { $gate.classList.remove('gone'); return; }
+  isTyping = true;
+  $sendBtn.disabled = true;
+
+  appendUserMsg(text);
+  chatHistory.push({ role: 'user', parts: [{ text }] });
+  $input.value = ''; autoResize();
+  showTypingIndicator();
+
+  try {
+    const ai = new GoogleGenAI({ apiKey: API_KEY });
+
+    // Build messages array for the API (all history + new message)
+    const messages = [];
+    // Add prior history (exclude the last user message we just pushed)
+    for (const h of chatHistory.slice(0, -1)) {
+      messages.push({
+        role: h.role === 'model' ? 'model' : 'user',
+        parts: h.parts
+      });
+    }
+    // Add current user message
+    messages.push({ role: 'user', parts: [{ text }] });
+
+    const result = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: messages,
+      config: { systemInstruction: RIKESH_INFO }
+    });
+
+    const reply = result.text;
+    chatHistory.push({ role: 'model', parts: [{ text: reply }] });
+    appendAIMsg(reply);
+  } catch (e) {
+    removeTypingIndicator();
+    appendAIMsg('Sorry, I had trouble connecting. Please try again. ' + e.message);
+    console.error('[chat]', e);
+  }
+  isTyping = false;
+  $sendBtn.disabled = false;
+}
+
+/* ═══ INPUT EVENTS ═══ */
+function autoResize() {
+  $input.style.height = 'auto';
+  $input.style.height = Math.min($input.scrollHeight, 120) + 'px';
+}
+$input.addEventListener('input', autoResize);
+$input.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage($input.value.trim()); }
+});
+$sendBtn.addEventListener('click', () => sendMessage($input.value.trim()));
+
+/* ═══ CALL BUTTON ═══ */
+$callBtn.addEventListener('click', () => {
+  $callModal.classList.add('active');
+  if (!API_KEY) { $callKeyGate.classList.add('show'); return; }
+  startCallSession();
+});
+
+/* ═══ END CALL BUTTONS ═══ */
+[$ctrlEnd, $endCallHdr].forEach(btn => btn.addEventListener('click', endCall));
+
+/* ═══ MUTE ═══ */
+$ctrlMute.addEventListener('click', () => {
+  callMuted = !callMuted;
+  $ctrlMute.classList.toggle('muted', callMuted);
+  $muteLabel.textContent = callMuted ? 'Muted' : 'Mic On';
+});
+
+/* ═══ AVATAR / CALL SESSION ═══ */
+async function startCallSession() {
+  if (callActive) return;
+  callActive = true;
+
+  // reset overlay
+  $callOverlay.classList.remove('hidden');
+  $loadBar.style.width = '0%';
+  $loadLbl.textContent = 'Initialising…';
+  $callTimerH.textContent = 'connecting…';
+  $callTimerB.textContent = '10:00';
+  $callLive.classList.remove('show');
+  $ring.classList.remove('active');
+  $callSubs.textContent = '';
+  $ctrlMute.disabled = true;
+  $statusBadge.textContent = 'calling'; $statusBadge.className = 'status-badge calling';
+
+  // init timeout bar (full = 100%)
+  $timeoutBar.style.transition = 'none';
+  $timeoutBar.style.width = '100%';
+  $timeoutBar.style.background = 'var(--gold)';
+
+  try {
+    await initCallAvatar();
+  } catch (e) {
+    showToast('Avatar failed: ' + e.message);
+    endCall(); return;
+  }
+
+  try {
+    const ai = new GoogleGenAI({ apiKey: API_KEY });
+    session = await ai.live.connect({
+      model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+      config: {
+        responseModalities: [Modality.AUDIO],
+        inputAudioTranscription: {}, outputAudioTranscription: {},
+        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
+        systemInstruction:
+          `You are Kimi — the warm, expressive voice assistant for Rikesh Dahal's portfolio. ` +
+          `You speak as if you're representing Rikesh professionally and warmly.\n\n` +
+          RIKESH_INFO +
+          `\n\nVOICE CALL NOTES:\n` +
+          `- Keep responses concise for voice (1-3 sentences ideally).\n` +
+          `- Speak naturally, warmly, and conversationally.\n` +
+          `- You have a 10-minute time limit for this call.\n` +
+          `- Auto-detect language: respond in Nepali if user speaks Nepali, English otherwise.\n` +
+          `- Your name is Kimi. You were created by Rikesh Dahal.\n` +
+          `- You are NOT ChatGPT, Gemini, or Claude. You are Kimi.`
+      },
+      callbacks: {
+        onopen: async () => {
+          isConnected = true;
+          $callLive.classList.add('show');
+          $liveHdr.classList.add('show');
+          $ctrlMute.disabled = false;
+          hideCallOverlay();
+          startCallTimer();
+          try { await startMic(); } catch (e) { console.error('[call mic]', e); }
+        },
+        onmessage: handleCallMessage,
+        onclose: ev => {
+          if (callActive) { endCall(true); }
+          if (ev?.code && ev.code !== 1000) showToast(`Disconnected (${ev.code})`);
+        },
+        onerror: ev => { showToast('Call error: ' + (ev?.message ?? 'unknown')); }
+      }
+    });
+  } catch (e) {
+    showToast('Connection failed: ' + e.message);
+    endCall(); return;
+  }
+}
+
+async function initCallAvatar() {
+  if (avatarInited) return;
+  avatarInited = true;
+  head = new TalkingHead(document.getElementById('call-avatar-el'), {
+    ttsEndpoint: 'N/A', lipsyncModules: ['en'], cameraView: 'upper',
+    mixerGainSpeech: 2.5, cameraRotateEnable: false
+  });
+  window._head = head;
+  if (head.audioCtx.state !== 'running') await head.audioCtx.resume().catch(console.warn);
+
+  $loadLbl.textContent = 'Loading Kimi…';
+  await head.showAvatar({
+    url: 'https://cdn.jsdelivr.net/gh/rikeshdahal/kimipack@main/kimi.glb',
+    body: 'F', avatarMood: 'neutral'
+  }, ev => {
+    if (ev?.lengthComputable) setLoadPct((ev.loaded / ev.total) * 100, 'Loading ' + Math.round(ev.loaded / ev.total * 100) + '%');
+  });
+  avatarReady = true;
+}
+
+/* ═══ CALL TIMER (10 min) ═══ */
+function startCallTimer() {
+  callStartTime = Date.now();
+
+  // animate timeout bar
+  requestAnimationFrame(() => {
+    $timeoutBar.style.transition = `width ${CALL_DURATION / 1000}s linear, background 60s`;
+    $timeoutBar.style.width = '0%';
+    $timeoutBar.style.background = 'var(--red)';
+  });
+
+  callTimerInterval = setInterval(() => {
+    const elapsed = Date.now() - callStartTime;
+    const remaining = Math.max(0, CALL_DURATION - elapsed);
+    const rmStr = fmtTime(remaining);
+    $callTimerH.textContent = 'remaining: ' + rmStr;
+    $callTimerB.textContent = rmStr;
+    if (remaining <= 60000) {
+      // last minute — make timer badge red
+      $callTimerB.style.color = 'var(--red)';
+    }
+  }, 1000);
+
+  callTimeoutTimer = setTimeout(() => {
+    showToast('10-minute call limit reached. Call ended automatically.', 6000);
+    endCall(true);
+  }, CALL_DURATION);
+}
+
+/* ═══ END CALL ═══ */
+function endCall(auto = false) {
+  if (!callActive) { $callModal.classList.remove('active'); return; }
+  callActive = false;
+  clearInterval(callTimerInterval); callTimerInterval = null;
+  clearTimeout(callTimeoutTimer); callTimeoutTimer = null;
+
+  // stop mic & session
+  stopMic();
+  try { session?.close(); } catch {}
+  session = null; isConnected = false;
+  interruptStream();
+  resetCallState();
+
+  $callModal.classList.remove('active');
+  $callLive.classList.remove('show');
+  $liveHdr.classList.remove('show');
+  $ring.classList.remove('active');
+  $callSubs.textContent = '';
+  $statusBadge.textContent = 'online'; $statusBadge.className = 'status-badge online';
+  $ctrlMute.disabled = true;
+  callMuted = false; $ctrlMute.classList.remove('muted'); $muteLabel.textContent = 'Mic On';
+  $timeoutBar.style.transition = 'none'; $timeoutBar.style.width = '100%';
+
+  // add a chat message about the call
+  if (auto) appendAIMsg('The 10-minute call just ended! Feel free to continue chatting here, or start a new call anytime.');
+  else appendAIMsg('Great talking! Hope I could help. Feel free to chat here anytime, or visit rikeshdahal.com.np to reach Rikesh directly.');
+}
+
+/* ═══ CALL MESSAGE HANDLER ═══ */
+function handleCallMessage(msg) {
+  try {
+    const c = msg?.serverContent; if (!c) return;
+    for (const p of (c.modelTurn?.parts ?? [])) {
+      if (p.inlineData?.mimeType?.includes('audio')) {
+        const txtForChunk = pendingText.trim(); pendingText = '';
+        enqueueAudio(decodePCM(p.inlineData.data), txtForChunk);
+      }
+    }
+    if (c.outputTranscription?.text) { pendingText += c.outputTranscription.text; }
+    if (c.turnComplete) {
+      if (pendingText.trim()) { const last = audioQueue[audioQueue.length - 1]; if (last && !last.text) last.text = pendingText.trim(); pendingText = ''; }
+      partialAIEl = null; scheduleClose();
+    }
+    if (c.interrupted) { pendingText = ''; partialAIEl = null; interruptStream(); }
+  } catch (e) { console.error('[callMsg]', e); }
+}
+
+/* ═══ AUDIO STREAM ═══ */
+async function openStream() {
+  if (!head || !avatarReady || streamActive) return true;
+  clearTimeout(streamCloseTimer);
+  try {
+    await head.streamStart(
+      { sampleRate: OUT_RATE, lipsyncType: 'visemes', gain: 1.2 },
+      () => { $ring.classList.add('active'); },
+      () => { $ring.classList.remove('active'); cancelSubtitles(); streamActive = false; },
+      () => {}
+    );
+    streamActive = true; streamTimeMs = 0; openVisemeCtr = 0;
+    return true;
+  } catch (e) { streamActive = false; return false; }
+}
+function scheduleClose() { clearTimeout(streamCloseTimer); streamCloseTimer = setTimeout(() => { if (!queueRunning && audioQueue.length === 0) closeStream(); }, STREAM_END_DLY); }
+function closeStream() { if (!head) return; try { head.streamStop(); } catch {} streamActive = false; streamTimeMs = 0; }
+function interruptStream() {
+  clearTimeout(streamCloseTimer); audioQueue = []; queueRunning = false;
+  if (!head) return; try { head.streamInterrupt(); } catch {}
+  streamActive = false; streamTimeMs = 0; openVisemeCtr = 0;
+  $ring.classList.remove('active'); cancelSubtitles();
+}
+function resetCallState() { partialAIEl = null; pendingText = ''; audioQueue = []; queueRunning = false; streamActive = false; streamTimeMs = 0; clearTimeout(streamCloseTimer); cancelSubtitles(); }
+
+function pcmToVisemes(pcm, startMs) {
+  const n = Math.ceil(pcm.length / FRAME_SAMP);
+  const rms = new Float32Array(n);
+  for (let f = 0; f < n; f++) {
+    const lo = f * FRAME_SAMP, hi = Math.min(lo + FRAME_SAMP, pcm.length);
+    let s = 0; for (let i = lo; i < hi; i++) s += (pcm[i] / 32768) ** 2;
+    rms[f] = Math.sqrt(s / (hi - lo));
+  }
+  const peak = Math.max(...rms, 1e-6), sil = Math.max(0.008, peak * 0.08), DUR = 20;
+  const vis = [], vt = [], vd = [];
+  for (let f = 0; f < n; f++) {
+    vt.push(startMs + f * DUR); vd.push(DUR);
+    if (rms[f] < sil) { vis.push('sil'); continue; }
+    const loud = Math.min(1, rms[f] / peak);
+    if (loud > 0.65) vis.push(OPEN_VISEMES[openVisemeCtr++ % OPEN_VISEMES.length]);
+    else if (loud > 0.32) vis.push('E');
+    else vis.push('I');
+  }
+  const sv = [], st = [], sd = [];
+  for (let i = 0; i < vis.length;) {
+    const v = vis[i]; let j = i + 1;
+    while (j < vis.length && vis[j] === v && j - i < 3) j++;
+    sv.push(v); st.push(vt[i]); sd.push(vd.slice(i, j).reduce((a, b) => a + b, 0)); i = j;
+  }
+  return { visemes: sv, vtimes: st, vdurations: sd };
+}
+
+function scheduleSubtitle(text, delayMs) {
+  if (!text) return;
+  const id = setTimeout(() => showSub(text), Math.max(0, delayMs));
+  subTimers.push(id);
+}
+function cancelSubtitles() { subTimers.forEach(clearTimeout); subTimers = []; showSub(''); }
+
+async function drainQueue() {
+  if (queueRunning) return; queueRunning = true;
+  let wallStart = null;
+  while (audioQueue.length > 0) {
+    if (!streamActive) { const ok = await openStream(); if (!ok) { audioQueue = []; break; } wallStart = performance.now(); }
+    const item = audioQueue.shift();
+    const durMs = Math.round((item.pcm.length / OUT_RATE) * 1000);
+    if (durMs < 10) continue;
+    const { visemes, vtimes, vdurations } = pcmToVisemes(item.pcm, streamTimeMs);
+    const elapsed = performance.now() - (wallStart ?? performance.now());
+    const playDelay = Math.max(0, streamTimeMs - elapsed);
+    streamTimeMs += durMs;
+    try {
+      head.streamAudio({ audio: item.pcm.buffer.slice(item.pcm.byteOffset, item.pcm.byteOffset + item.pcm.byteLength), visemes, vtimes, vdurations });
+      if (item.text) scheduleSubtitle(item.text, playDelay);
+    } catch (e) { audioQueue.unshift(item); await sleep(50); }
+    await sleep(QUEUE_POLL);
+  }
+  queueRunning = false;
+}
+function enqueueAudio(pcm, text = '') { audioQueue.push({ pcm, text }); drainQueue(); }
+function decodePCM(b64) { const bin = atob(b64), bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i); return new Int16Array(bytes.buffer); }
+
+/* ═══ MICROPHONE ═══ */
+function f32toPCM(f) { const o = new Int16Array(f.length); for (let i = 0; i < f.length; i++) { const s = Math.max(-1, Math.min(1, f[i])); o[i] = s < 0 ? s * 0x8000 : s * 0x7FFF; } return o; }
+function toB64(i16) { const b = new Uint8Array(i16.buffer, i16.byteOffset, i16.byteLength); let s = ''; for (let i = 0; i < b.length; i += 8192) s += String.fromCharCode(...b.subarray(i, i + 8192)); return btoa(s); }
+
+async function startMic() {
+  micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 }, video: false });
+  if (!micCtx) micCtx = new AudioContext({ sampleRate: MIC_RATE });
+  if (micCtx.state === 'suspended') await micCtx.resume();
+  const src = micCtx.createMediaStreamSource(micStream);
+  if (!micWorkletLoaded) {
+    const code = `class MC extends AudioWorkletProcessor { process(i){const c=i[0]?.[0];if(c?.length)this.port.postMessage(c.slice());return true;}} registerProcessor('mc',MC);`;
+    const blob = new Blob([code], { type: 'application/javascript' });
+    await micCtx.audioWorklet.addModule(URL.createObjectURL(blob));
+    micWorkletLoaded = true;
+  }
+  micNode = new AudioWorkletNode(micCtx, 'mc');
+  src.connect(micNode);
+  micNode.port.onmessage = ({ data: f32 }) => {
+    if (callMuted || !session || !isConnected) return;
+    try { session.sendRealtimeInput({ media: { data: toB64(f32toPCM(f32)), mimeType: 'audio/pcm;rate=16000' } }); } catch {}
+  };
+}
+function stopMic() {
+  try { micNode?.disconnect(); } catch {}
+  try { micStream?.getTracks().forEach(t => t.stop()); } catch {}
+  try { if (micCtx?.state === 'running') micCtx.suspend(); } catch {}
+  micNode = null; micStream = null;
+}
+
+/* ═══ VISIBILITY ═══ */
+document.addEventListener('visibilitychange', () => {
+  if (!head) return;
+  document.visibilityState === 'visible' ? head.start() : head.stop();
+});
+window.addEventListener('beforeunload', () => { try { session?.close(); } catch {} stopMic(); });
+</script>
+</body>
+</html>
