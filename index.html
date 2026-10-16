@@ -2424,7 +2424,36 @@ The call ends automatically at 10 minutes.`;
       speakWithKimi(greeting);
     }
 
-    function speakWithKimi(text) {
+    function audioBufferToInt16PCM(audioBuffer, targetRate = 24000) {
+      const inRate = audioBuffer.sampleRate;
+      const inData = audioBuffer.getChannelData(0);
+
+      if (inRate === targetRate) {
+        const out = new Int16Array(inData.length);
+        for (let i = 0; i < inData.length; i++) {
+          const s = Math.max(-1, Math.min(1, inData[i]));
+          out[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+        return out;
+      }
+
+      // Linear resampling to targetRate
+      const ratio = inRate / targetRate;
+      const outLength = Math.round(inData.length / ratio);
+      const out = new Int16Array(outLength);
+      for (let i = 0; i < outLength; i++) {
+        const inIdx = i * ratio;
+        const i0 = Math.floor(inIdx);
+        const i1 = Math.min(i0 + 1, inData.length - 1);
+        const frac = inIdx - i0;
+        const sample = inData[i0] * (1 - frac) + inData[i1] * frac;
+        const s = Math.max(-1, Math.min(1, sample));
+        out[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      }
+      return out;
+    }
+
+    async function speakWithKimi(text) {
       if (!callActive) return;
       isVoiceSpeaking = true;
       $ring.classList.add('active');
@@ -2436,6 +2465,49 @@ The call ends automatically at 10 minutes.`;
         try { head.playGesture('namaste'); } catch { }
       }
 
+      // ── Step 1: Attempt Realistic Neural TTS via Backend ──
+      let neuralPlayed = false;
+      try {
+        const ttsUrl = `${RIKESH_BACKEND}/api/tts`;
+        let res = await fetch(ttsUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: clean })
+        }).catch(() => null);
+
+        if (!res || !res.ok) {
+          res = await fetch(`${RIKESH_BACKEND}/tts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: clean })
+          }).catch(() => null);
+        }
+
+        if (res && res.ok) {
+          const arrayBuf = await res.arrayBuffer();
+          if (arrayBuf && arrayBuf.byteLength > 200 && head) {
+            if (head.audioCtx.state === 'suspended') {
+              await head.audioCtx.resume().catch(console.warn);
+            }
+            const audioBuffer = await head.audioCtx.decodeAudioData(arrayBuf.slice(0));
+            const pcm = audioBufferToInt16PCM(audioBuffer, OUT_RATE);
+
+            // Chunk PCM into ~300ms slices for smooth real-time lipsync streaming
+            const chunkSize = Math.round(OUT_RATE * 0.30);
+            for (let i = 0; i < pcm.length; i += chunkSize) {
+              const slice = pcm.subarray(i, Math.min(i + chunkSize, pcm.length));
+              enqueueAudio(slice, i === 0 ? clean : '');
+            }
+            neuralPlayed = true;
+          }
+        }
+      } catch (err) {
+        console.warn('[Neural TTS playback failed, using WebSpeech fallback]', err);
+      }
+
+      if (neuralPlayed) return;
+
+      // ── Step 2: Fallback to Web Speech Synthesis + Viseme Animation ──
       const done = () => {
         clearInterval(visemeInterval);
         visemeInterval = null;
@@ -2450,12 +2522,12 @@ The call ends automatically at 10 minutes.`;
       if ('speechSynthesis' in window) {
         try { window.speechSynthesis.cancel(); } catch { }
         const u = new SpeechSynthesisUtterance(clean);
-        u.lang = 'en-US';
+        u.lang = /[\u0900-\u097F]/.test(clean) ? 'ne-NP' : 'en-US';
         u.rate = 1.04;
         u.pitch = 1.02;
 
         const voices = window.speechSynthesis.getVoices();
-        const preferred = voices.find(v => (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Samantha') || v.name.includes('Jenny') || v.name.includes('Female')) && v.lang.startsWith('en')) || voices.find(v => v.lang.startsWith('en'));
+        const preferred = voices.find(v => (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Samantha') || v.name.includes('Jenny') || v.name.includes('Female')) && v.lang.startsWith(u.lang.slice(0, 2))) || voices.find(v => v.lang.startsWith(u.lang.slice(0, 2)));
         if (preferred) u.voice = preferred;
 
         const VISEMES = ['aa', 'E', 'I', 'O', 'aa', 'E', 'PP', 'SS', 'TH'];
