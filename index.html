@@ -738,32 +738,40 @@ function createStreamBubble() {
   removeTyping();
   const div = document.createElement('div'); div.className = 'msg ai';
   const bubble = document.createElement('div'); bubble.className = 'bubble';
+  const contentEl = document.createElement('div'); contentEl.className = 'bubble-content';
   const cursor = document.createElement('span'); cursor.className = 'typing-cursor';
-  // rawEl shows streaming text live (plain), replaced by rendered markdown on done
-  const rawEl = document.createElement('span'); rawEl.className = 'raw-stream';
-  bubble.appendChild(rawEl);
+  bubble.appendChild(contentEl);
   bubble.appendChild(cursor);
   div.innerHTML = `<div class="msg-avatar"><img src="https://i.postimg.cc/5tTNWYqp/rd.png"/></div><div class="msg-body"><div class="msg-name">Kimi</div></div>`;
   div.querySelector('.msg-body').appendChild(bubble);
   $messages.appendChild(div);
   let raw = '';
+  let renderPending = false;
+
+  const updateRender = () => {
+    contentEl.innerHTML = renderMarkdown(raw);
+    contentEl.appendChild(cursor);
+    $messages.scrollTop = $messages.scrollHeight;
+    renderPending = false;
+  };
+
   return {
-    bubble, cursor, rawEl,
+    bubble, cursor,
     appendChunk(chunk) {
       raw += chunk;
-      // Live preview: show plain text while streaming
-      rawEl.textContent = raw;
-      $messages.scrollTop = $messages.scrollHeight;
+      if (!renderPending) {
+        renderPending = true;
+        requestAnimationFrame(updateRender);
+      }
     },
     finalize() {
       cursor.remove();
-      rawEl.remove();
-      bubble.innerHTML = renderMarkdown(raw);
+      contentEl.innerHTML = renderMarkdown(raw);
       $messages.scrollTop = $messages.scrollHeight;
     },
     setError(msg) {
-      cursor.remove(); rawEl.remove();
-      bubble.textContent = msg;
+      cursor.remove();
+      contentEl.textContent = msg;
     }
   };
 }
