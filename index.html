@@ -1221,7 +1221,17 @@
     #call-avatar-el {
       display: block;
       width: 100%;
-      height: 100%
+      height: 100%;
+      position: absolute;
+      inset: 0;
+      touch-action: none;
+    }
+
+    #call-avatar-el canvas {
+      width: 100% !important;
+      height: 100% !important;
+      display: block;
+      touch-action: none;
     }
 
     #call-overlay {
@@ -1338,19 +1348,31 @@
 
     #call-subs {
       position: absolute;
-      bottom: 7%;
+      bottom: 12px;
       left: 50%;
       transform: translateX(-50%);
-      width: 88%;
+      width: min(92%, 560px);
       text-align: center;
       z-index: 30;
       font-family: 'Space Mono', monospace;
-      font-size: clamp(10px, 3vw, 14px);
+      font-size: clamp(11px, 2.8vw, 14px);
       line-height: 1.5;
       color: #fff;
-      text-shadow: 0 2px 12px rgba(0, 0, 0, .95);
+      text-shadow: 0 2px 10px rgba(0, 0, 0, .95), 0 0 20px rgba(0, 0, 0, .8);
+      background: rgba(10, 10, 14, 0.78);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      padding: 8px 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
       pointer-events: none;
-      min-height: 2em
+      min-height: 2em;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+
+    #call-subs:empty {
+      opacity: 0;
+      pointer-events: none;
     }
 
     .cam-pip {
@@ -1358,19 +1380,20 @@
       bottom: 14px;
       left: 14px;
       z-index: 40;
-      width: 96px;
-      height: 62px;
+      width: clamp(74px, 18vw, 110px);
+      height: clamp(50px, 12vw, 74px);
       border-radius: 10px;
       overflow: hidden;
       border: 1.5px solid var(--border2);
       background: #000;
       box-shadow: 0 4px 20px rgba(0, 0, 0, .65);
       cursor: pointer;
-      transition: border-color .2s
+      transition: border-color .2s, transform .2s;
     }
 
     .cam-pip:hover {
-      border-color: var(--gold)
+      border-color: var(--gold);
+      transform: scale(1.03);
     }
 
     #cam-video {
@@ -1447,7 +1470,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
+      gap: 10px;
       flex-shrink: 0;
       background: rgba(10, 10, 12, .97)
     }
@@ -1456,17 +1479,20 @@
       display: flex;
       flex-direction: column;
       align-items: center;
+      justify-content: center;
       gap: 4px;
       background: var(--surface2);
       border: 1px solid var(--border2);
       border-radius: 12px;
       padding: 8px 12px;
+      min-height: 50px;
       cursor: pointer;
       transition: all var(--ease);
       color: var(--muted);
-      min-width: 52px;
+      min-width: 54px;
       flex: 1;
-      max-width: 80px
+      max-width: 90px;
+      user-select: none;
     }
 
     .ctrl-btn:hover:not(:disabled) {
@@ -2039,11 +2065,12 @@
 
     /* ══ CALL GATE ══ */
     $callGSub.addEventListener('click', () => {
-      // If user is on Rikesh AI mode, reuse the same key for the call
       const k = $callGKey.value.trim() || GEMINI_KEY;
-      if (!isValidGeminiKey(k)) { showToast('Invalid key — enter a valid Gemini key (AIza… or AQ.…)'); return; }
-      CALL_KEY = k;
-      try { sessionStorage.setItem('kimi_call_key', k); } catch { }
+      if (k && !isValidGeminiKey(k)) { showToast('Invalid key — enter a valid Gemini key (AIza… or AQ.…), or leave blank for Free mode'); return; }
+      if (k) {
+        CALL_KEY = k;
+        try { sessionStorage.setItem('kimi_call_key', k); } catch { }
+      }
       $callKG.classList.remove('show');
       startCallSession();
     });
@@ -2250,20 +2277,31 @@
     /* ══ CALL BUTTON ══ */
     $callBtn.addEventListener('click', () => {
       $callModal.classList.add('active');
-      // If using Rikesh AI model, the Gemini key is already known — skip second key gate
-      if (USE_RIKESH_MODEL && GEMINI_KEY) {
-        CALL_KEY = GEMINI_KEY;
-        startCallSession();
-        return;
-      }
-      // Otherwise check session storage for previously entered call key
-      try { const k = sessionStorage.getItem('kimi_call_key'); if (k) { CALL_KEY = k; startCallSession(); return; } } catch { }
-      $callKG.classList.add('show');
+      CALL_KEY = GEMINI_KEY || '';
+      try {
+        const k = sessionStorage.getItem('kimi_call_key') || sessionStorage.getItem('kimi_gemini_key');
+        if (k) CALL_KEY = k;
+      } catch { }
+      startCallSession();
     });
     [$ctrlEnd, $endHdr].forEach(b => b.addEventListener('click', () => endCall(false)));
 
     /* ══ MUTE / CAM ══ */
-    $ctrlMute.addEventListener('click', () => { callMuted = !callMuted; $ctrlMute.classList.toggle('muted-state', callMuted); $muteLabel.textContent = callMuted ? 'Muted' : 'Mic'; });
+    $ctrlMute.addEventListener('click', () => {
+      callMuted = !callMuted;
+      $ctrlMute.classList.toggle('muted-state', callMuted);
+      $muteLabel.textContent = callMuted ? 'Muted' : 'Mic';
+      if (callMuted) {
+        try { callVoiceRec?.stop(); } catch { }
+        try { window.speechSynthesis?.cancel(); } catch { }
+        isVoiceSpeaking = false;
+        $ring.classList.remove('active');
+        showSub('Microphone muted');
+      } else {
+        showSub('');
+        if (!isVoiceSpeaking) listenForCallSpeech();
+      }
+    });
     $ctrlCam.addEventListener('click', () => isCamOn ? stopCamera() : startCamera());
     $ctrlSnap.addEventListener('click', takeSnapshot);
     $camPip.addEventListener('click', () => { if (!callActive) return; isCamOn ? takeSnapshot() : startCamera(); });
@@ -2278,7 +2316,7 @@ The call ends automatically at 10 minutes.`;
       if (callActive) return;
       callActive = true;
       $callOverlay.classList.remove('hidden'); $callOverlay.style.opacity = '1'; $callOverlay.style.pointerEvents = '';
-      $loadBar.style.width = '0%'; $loadLbl.textContent = 'Initialising…';
+      $loadBar.style.width = '0%'; $loadLbl.textContent = 'Initialising 3D Avatar…';
       $callTimerH.textContent = 'connecting…'; $callTimerB.textContent = '10:00'; $callTimerB.classList.remove('urgent');
       $callLive.classList.remove('show'); $ring.classList.remove('active'); $callSubs.textContent = '';
       $ctrlMute.disabled = true; $ctrlCam.disabled = true; $ctrlSnap.disabled = true;
@@ -2296,67 +2334,70 @@ The call ends automatically at 10 minutes.`;
 
       $loadLbl.textContent = 'Connecting Voice AI…';
 
-      const LIVE_MODELS = [
-        'gemini-2.5-flash-native-audio-latest',
-        'gemini-2.5-flash-native-audio-preview-12-2025',
-        'gemini-2.5-flash-native-audio-preview-09-2025'
-      ];
-
       let connected = false;
-      const ai = new GoogleGenAI({ apiKey: CALL_KEY });
-
-      for (const modelName of LIVE_MODELS) {
-        if (!callActive) break;
+      // If user supplied a valid key, attempt Live WebSocket first
+      if (CALL_KEY && isValidGeminiKey(CALL_KEY)) {
+        const LIVE_MODELS = [
+          'gemini-2.5-flash-native-audio-latest',
+          'gemini-2.5-flash-native-audio-preview-12-2025'
+        ];
         try {
-          console.log(`[call] Attempting WebSocket Live with ${modelName}`);
-          session = await ai.live.connect({
-            model: modelName,
-            config: {
-              responseModalities: [Modality.AUDIO],
-              inputAudioTranscription: {}, outputAudioTranscription: {},
-              speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
-              systemInstruction: CALL_SYSTEM
-            },
-            callbacks: {
-              onopen: async () => {
-                console.log(`[call] WebSocket Live connected with ${modelName}`);
-                isConnected = true;
-                $callLive.classList.add('show');
-                $liveHdr.classList.add('show');
-                $ctrlMute.disabled = false;
-                $ctrlCam.disabled = false;
-                hideCallOverlay();
-                startCallTimer();
-                try { await startCallMic(); } catch (e) { showToast('Mic error: ' + e.message); }
-              },
-              onmessage: handleCallMsg,
-              onclose: ev => {
-                console.warn('[call onclose]', ev);
-                if (callActive) {
-                  // If server closed with 1008 (denied access), fallback to interactive voice instead of dropping
-                  if (ev?.code === 1008 || !isConnected) {
-                    startInteractiveVoiceMode();
-                  } else {
-                    endCall(true);
+          const ai = new GoogleGenAI({ apiKey: CALL_KEY });
+          for (const modelName of LIVE_MODELS) {
+            if (!callActive) break;
+            try {
+              console.log(`[call] Attempting WebSocket Live with ${modelName}`);
+              session = await ai.live.connect({
+                model: modelName,
+                config: {
+                  responseModalities: [Modality.AUDIO],
+                  inputAudioTranscription: {}, outputAudioTranscription: {},
+                  speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
+                  systemInstruction: CALL_SYSTEM
+                },
+                callbacks: {
+                  onopen: async () => {
+                    console.log(`[call] WebSocket Live connected with ${modelName}`);
+                    isConnected = true;
+                    $callLive.classList.add('show');
+                    $liveHdr.classList.add('show');
+                    $ctrlMute.disabled = false;
+                    $ctrlCam.disabled = false;
+                    hideCallOverlay();
+                    startCallTimer();
+                    try { await startCallMic(); } catch (e) { showToast('Mic error: ' + e.message); }
+                  },
+                  onmessage: handleCallMsg,
+                  onclose: ev => {
+                    console.warn('[call onclose]', ev);
+                    if (callActive) {
+                      if (ev?.code === 1008 || !isConnected) {
+                        startInteractiveVoiceMode();
+                      } else {
+                        endCall(true);
+                      }
+                    }
+                  },
+                  onerror: ev => {
+                    console.warn('[call onerror]', ev);
+                    if (callActive && !isConnected) {
+                      startInteractiveVoiceMode();
+                    }
                   }
                 }
-              },
-              onerror: ev => {
-                console.warn('[call onerror]', ev);
-                if (callActive && !isConnected) {
-                  startInteractiveVoiceMode();
-                }
-              }
+              });
+              connected = true;
+              break;
+            } catch (err) {
+              console.warn(`[call] WebSocket Live failed with ${modelName}:`, err);
             }
-          });
-          connected = true;
-          break;
-        } catch (err) {
-          console.warn(`[call] WebSocket Live failed with ${modelName}:`, err);
+          }
+        } catch (e) {
+          console.warn('[call] GoogleGenAI init failed:', e);
         }
       }
 
-      // If WebSocket Live is denied or unavailable on this key/project, seamlessly run Interactive Voice Mode
+      // If WebSocket Live is denied or no key was entered, seamlessly run 100% Free Voice Mode
       if (!connected && callActive) {
         startInteractiveVoiceMode();
       }
@@ -2364,10 +2405,11 @@ The call ends automatically at 10 minutes.`;
 
     let isVoiceSpeaking = false;
     let callVoiceRec = null;
+    let visemeInterval = null;
 
     function startInteractiveVoiceMode() {
       if (!callActive) return;
-      console.log('[call] Running Interactive Voice Mode');
+      console.log('[call] Running Free Interactive Voice Mode');
       isConnected = true;
       $callLive.classList.add('show');
       $liveHdr.classList.add('show');
@@ -2387,31 +2429,63 @@ The call ends automatically at 10 minutes.`;
       isVoiceSpeaking = true;
       $ring.classList.add('active');
       const clean = text.replace(/[*_#`~>\[\]]/g, '').trim();
+      showSub(clean);
+
+      // Play namaste gesture if greeting
+      if (clean.toLowerCase().includes('namaste') && head && typeof head.playGesture === 'function') {
+        try { head.playGesture('namaste'); } catch { }
+      }
 
       const done = () => {
+        clearInterval(visemeInterval);
+        visemeInterval = null;
         $ring.classList.remove('active');
         isVoiceSpeaking = false;
+        try { head?.streamStop(); } catch { }
         if (callActive && !callMuted) {
           listenForCallSpeech();
         }
       };
 
-      try {
-        if (head && typeof head.speakText === 'function') {
-          head.speakText(clean, { onstop: done });
-        } else if ('speechSynthesis' in window) {
-          const u = new SpeechSynthesisUtterance(clean);
-          u.lang = 'en-US';
-          u.rate = 1.05;
-          u.onend = done;
-          u.onerror = done;
-          window.speechSynthesis.speak(u);
-        } else {
-          done();
-        }
-      } catch (e) {
-        console.warn('[speakWithKimi]', e);
-        done();
+      if ('speechSynthesis' in window) {
+        try { window.speechSynthesis.cancel(); } catch { }
+        const u = new SpeechSynthesisUtterance(clean);
+        u.lang = 'en-US';
+        u.rate = 1.04;
+        u.pitch = 1.02;
+
+        const voices = window.speechSynthesis.getVoices();
+        const preferred = voices.find(v => (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Samantha') || v.name.includes('Jenny') || v.name.includes('Female')) && v.lang.startsWith('en')) || voices.find(v => v.lang.startsWith('en'));
+        if (preferred) u.voice = preferred;
+
+        const VISEMES = ['aa', 'E', 'I', 'O', 'aa', 'E', 'PP', 'SS', 'TH'];
+        let vI = 0;
+        const silentPcm = new Int16Array(FRAME_SAMP * 4);
+
+        u.onstart = async () => {
+          try {
+            await openStream();
+            visemeInterval = setInterval(() => {
+              if (!isVoiceSpeaking || !callActive || !streamActive || !head) return;
+              try {
+                head.streamAudio({
+                  audio: silentPcm.buffer.slice(0),
+                  visemes: [VISEMES[vI++ % VISEMES.length]],
+                  vtimes: [0],
+                  vdurations: [120]
+                });
+              } catch { }
+            }, 90);
+          } catch (e) {
+            console.warn('[speech viseme error]', e);
+          }
+        };
+
+        u.onend = done;
+        u.onerror = done;
+        window.speechSynthesis.speak(u);
+      } else {
+        setTimeout(done, Math.min(6000, Math.max(1500, clean.length * 60)));
       }
     }
 
@@ -2420,7 +2494,7 @@ The call ends automatically at 10 minutes.`;
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SR) return;
 
-      try { callVoiceRec?.stop(); } catch {}
+      try { callVoiceRec?.stop(); } catch { }
       callVoiceRec = new SR();
       callVoiceRec.continuous = false;
       callVoiceRec.interimResults = true;
@@ -2438,7 +2512,7 @@ The call ends automatically at 10 minutes.`;
         }
         if (final || interim) showSub(`You: ${final || interim}`);
         if (final && final.trim()) {
-          try { callVoiceRec.stop(); } catch {}
+          try { callVoiceRec.stop(); } catch { }
           respondToCallSpeech(final.trim());
         }
       };
@@ -2491,7 +2565,7 @@ The call ends automatically at 10 minutes.`;
                 reply += obj.chunk;
                 showSub(reply);
               }
-            } catch {}
+            } catch { }
           }
         }
 
@@ -2502,11 +2576,54 @@ The call ends automatically at 10 minutes.`;
       }
     }
 
+    /* ── CURSOR TRACKING FOR TALKINGHEAD ── */
+    let idleGazeTimer = null;
+    function resetIdleGaze() {
+      clearTimeout(idleGazeTimer);
+      idleGazeTimer = setTimeout(() => {
+        if (head && avatarReady && callActive) {
+          try { head.lookAtCamera(500); } catch { }
+        }
+      }, 2500);
+    }
+
+    window.addEventListener('mousemove', (e) => {
+      if (!head || !avatarReady || !callActive) return;
+      try {
+        head.lookAt(e.clientX, e.clientY, 120);
+        resetIdleGaze();
+      } catch { }
+    });
+
+    window.addEventListener('touchmove', (e) => {
+      if (!head || !avatarReady || !callActive || !e.touches[0]) return;
+      try {
+        head.lookAt(e.touches[0].clientX, e.touches[0].clientY, 120);
+        resetIdleGaze();
+      } catch { }
+    }, { passive: true });
+
+    window.addEventListener('mouseleave', () => {
+      if (head && avatarReady && callActive) {
+        try { head.lookAtCamera(600); } catch { }
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      if (head && typeof head.resize === 'function') {
+        try { head.resize(); } catch { }
+      }
+    });
+
     async function initCallAvatar() {
       if (avatarInited && avatarReady) return;
       if (!avatarInited) {
         head = new TalkingHead(document.getElementById('call-avatar-el'), {
-          ttsEndpoint: 'N/A', lipsyncModules: ['en'], cameraView: 'upper', mixerGainSpeech: 2.5, cameraRotateEnable: false
+          ttsEndpoint: 'N/A',
+          lipsyncModules: ['en'],
+          cameraView: 'upper',
+          mixerGainSpeech: 2.5,
+          cameraRotateEnable: false
         });
         window._head = head;
         avatarInited = true;
@@ -2514,10 +2631,15 @@ The call ends automatically at 10 minutes.`;
       if (head.audioCtx.state !== 'running') await head.audioCtx.resume().catch(console.warn);
       $loadLbl.textContent = 'Loading Kimi…';
       if (!avatarReady) {
-        await head.showAvatar({ url: 'https://cdn.jsdelivr.net/gh/rikeshdahal/kimipack@main/kimi.glb', body: 'F', avatarMood: 'neutral' }, ev => {
+        await head.showAvatar({
+          url: 'https://cdn.jsdelivr.net/gh/rikeshdahal/kimipack@main/kimi.glb',
+          body: 'F',
+          avatarMood: 'neutral'
+        }, ev => {
           if (ev?.lengthComputable) setLoadPct((ev.loaded / ev.total) * 100, 'Loading ' + Math.round(ev.loaded / ev.total * 100) + '%');
         });
         avatarReady = true;
+        try { head.playGesture('namaste'); } catch { }
       }
     }
 
