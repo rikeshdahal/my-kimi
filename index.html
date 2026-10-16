@@ -279,7 +279,7 @@ footer{padding:9px 12px;padding-bottom:calc(9px + var(--sab));border-top:1px sol
 
     <div>
       <span class="gate-label">Gemini API Key <span style="color:var(--muted);font-size:8px;letter-spacing:0;text-transform:none">(optional — for voice calls)</span></span>
-      <input id="gate-gemini-key" class="gate-input" type="password" placeholder="AIzaSy… (leave blank to chat only)" autocomplete="off" inputmode="text"/>
+      <input id="gate-gemini-key" class="gate-input" type="password" placeholder="AIzaSy… or AQ.… (leave blank to chat only)" autocomplete="off" inputmode="text"/>
     </div>
     <button class="gate-btn" id="gate-submit-rikesh">Start Chatting →</button>
     <div class="gate-note">No key? No problem — chat works for free.<br>
@@ -354,7 +354,7 @@ footer{padding:9px 12px;padding-bottom:calc(9px + var(--sab));border-top:1px sol
       <div class="gate-desc">Enter your Gemini API key for the live voice call (direct browser connection).</div>
       <div>
         <span class="gate-label">Gemini API Key</span>
-        <input id="call-gate-key" class="gate-input" type="password" placeholder="AIzaSy…" inputmode="text"/>
+        <input id="call-gate-key" class="gate-input" type="password" placeholder="AIzaSy… or AQ.…" inputmode="text"/>
       </div>
       <button class="gate-btn" id="call-gate-submit">Start Call →</button>
       <button class="gate-btn secondary" id="call-gate-cancel">Cancel</button>
@@ -534,6 +534,11 @@ function showSub(t) { $callSubs.textContent = t ? t.slice(-120) : ''; }
 function setLoadPct(p, l) { $loadBar.style.width = Math.min(100,p)+'%'; if(l) $loadLbl.textContent = l; }
 function hideCallOverlay() { $callOverlay.style.opacity='0'; $callOverlay.style.pointerEvents='none'; setTimeout(()=>$callOverlay.classList.add('hidden'),400); }
 function escHtml(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function isValidGeminiKey(k) {
+  if (!k || typeof k !== 'string') return false;
+  const t = k.trim();
+  return t.startsWith('AIza') || t.startsWith('AQ.') || (t.length >= 25 && /^[A-Za-z0-9._-]+$/.test(t));
+}
 
 /* ── SYNTAX HIGHLIGHTER ── */
 function highlight(code, lang) {
@@ -650,7 +655,7 @@ $gateSubmitR.addEventListener('click', () => {
   const k = $gateGemKey.value.trim();
   // key is optional — only store if provided and looks valid
   if (k) {
-    if (!k.startsWith('AIza')) { showToast('Key looks invalid — leave blank or enter a valid AIzaSy… key'); return; }
+    if (!isValidGeminiKey(k)) { showToast('Key looks invalid — enter a valid Gemini key (AIza… or AQ.…)'); return; }
     GEMINI_KEY = k;
     try { sessionStorage.setItem('kimi_gemini_key', k); } catch {}
   }
@@ -680,7 +685,7 @@ $gateGemKey.addEventListener('keydown', e => { if (e.key === 'Enter') $gateSubmi
 $callGSub.addEventListener('click', () => {
   // If user is on Rikesh AI mode, reuse the same key for the call
   const k = $callGKey.value.trim() || GEMINI_KEY;
-  if (!k || !k.startsWith('AIza')) { showToast('Invalid key'); return; }
+  if (!isValidGeminiKey(k)) { showToast('Invalid key — enter a valid Gemini key (AIza… or AQ.…)'); return; }
   CALL_KEY = k;
   try { sessionStorage.setItem('kimi_call_key', k); } catch {}
   $callKG.classList.remove('show');
@@ -936,7 +941,10 @@ async function startCallSession() {
         },
         onmessage: handleCallMsg,
         onclose: ev => { if(callActive) endCall(true); },
-        onerror: ev => { showToast('Call error: '+(ev?.message??'unknown')); }
+        onerror: ev => { 
+          console.error('[call live error]', ev);
+          showToast('Call error: ' + (ev?.message || ev?.reason || 'Check key or mic permission')); 
+        }
       }
     });
   } catch(e) { showToast('Connection failed: '+e.message); endCall(true); }
