@@ -785,11 +785,18 @@ function createStreamBubble() {
 async function sendViaRikeshModel(text) {
   const body = { message: text, session_id: SESSION_ID, stream: true };
   if (GEMINI_KEY) body.api_key = GEMINI_KEY;
-  const res = await fetch(`${RIKESH_BACKEND}/chat`, {
+  let res = await fetch(`${RIKESH_BACKEND}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
+  if (res.status === 404) {
+    res = await fetch(`${RIKESH_BACKEND}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+  }
   return res;
 }
 
@@ -921,45 +928,99 @@ async function startCallSession() {
   $ctrlMute.disabled=true; $ctrlCam.disabled=true; $ctrlSnap.disabled=true;
   $statusBadge.textContent='calling'; $statusBadge.className='status-badge calling';
   $timeoutBar.style.transition='none'; $timeoutBar.style.width='100%'; $timeoutBar.style.background='var(--gold)';
-  try { await initCallAvatar(); } catch(e) { showToast('Avatar error: '+e.message); endCall(true); return; }
-  try {
-    const ai = new GoogleGenAI({ apiKey: CALL_KEY });
-    session = await ai.live.connect({
-      model: 'gemini-2.5-flash-native-audio-preview-09-2025',
-      config: {
-        responseModalities: [Modality.AUDIO],
-        inputAudioTranscription: {}, outputAudioTranscription: {},
-        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
-        systemInstruction: CALL_SYSTEM
-      },
-      callbacks: {
-        onopen: async () => {
-          isConnected=true; $callLive.classList.add('show'); $liveHdr.classList.add('show');
-          $ctrlMute.disabled=false; $ctrlCam.disabled=false;
-          hideCallOverlay(); startCallTimer();
-          try { await startCallMic(); } catch(e) { showToast('Mic error: '+e.message); }
+
+  try { 
+    await initCallAvatar(); 
+  } catch(e) { 
+    console.error('[avatar error]', e);
+    showToast('Avatar error: ' + (e.message || 'Failed to load avatar')); 
+    endCall(true); 
+    return; 
+  }
+
+  $loadLbl.textContent = 'Connecting Voice AI…';
+
+  const LIVE_MODELS = [
+    'gemini-2.0-flash-exp',
+    'gemini-2.0-flash-realtime-exp',
+    'gemini-2.5-flash-native-audio-preview-09-2025'
+  ];
+
+  let connected = false;
+  let lastError = null;
+  const ai = new GoogleGenAI({ apiKey: CALL_KEY });
+
+  for (const modelName of LIVE_MODELS) {
+    if (!callActive) break;
+    try {
+      console.log(`[call] Attempting live connect with model: ${modelName}`);
+      session = await ai.live.connect({
+        model: modelName,
+        config: {
+          responseModalities: [Modality.AUDIO],
+          inputAudioTranscription: {}, outputAudioTranscription: {},
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
+          systemInstruction: CALL_SYSTEM
         },
-        onmessage: handleCallMsg,
-        onclose: ev => { if(callActive) endCall(true); },
-        onerror: ev => { 
-          console.error('[call live error]', ev);
-          showToast('Call error: ' + (ev?.message || ev?.reason || 'Check key or mic permission')); 
+        callbacks: {
+          onopen: async () => {
+            console.log(`[call] Connected successfully with ${modelName}`);
+            isConnected = true; 
+            $callLive.classList.add('show'); 
+            $liveHdr.classList.add('show');
+            $ctrlMute.disabled = false; 
+            $ctrlCam.disabled = false;
+            hideCallOverlay(); 
+            startCallTimer();
+            try { await startCallMic(); } catch(e) { showToast('Mic error: ' + e.message); }
+          },
+          onmessage: handleCallMsg,
+          onclose: ev => { 
+            console.warn('[call onclose]', ev);
+            if (callActive) {
+              if (ev?.code && ev?.code !== 1000) {
+                showToast(`Call ended (${ev.code}): ${ev.reason || 'Server closed connection'}`);
+              }
+              endCall(true);
+            }
+          },
+          onerror: ev => { 
+            console.error('[call onerror]', ev);
+            showToast('Call error: ' + (ev?.message || ev?.reason || 'WebSocket error')); 
+          }
         }
-      }
-    });
-  } catch(e) { showToast('Connection failed: '+e.message); endCall(true); }
+      });
+      connected = true;
+      break;
+    } catch(err) {
+      console.warn(`[call] Failed with ${modelName}:`, err);
+      lastError = err;
+    }
+  }
+
+  if (!connected && callActive) {
+    showToast('Voice connection failed: ' + (lastError?.message || 'Check Gemini key'));
+    endCall(true);
+  }
 }
 
 async function initCallAvatar() {
-  if (avatarInited) return; avatarInited = true;
-  head = new TalkingHead(document.getElementById('call-avatar-el'), { ttsEndpoint:'N/A', lipsyncModules:['en'], cameraView:'upper', mixerGainSpeech:2.5, cameraRotateEnable:false });
-  window._head = head;
-  if (head.audioCtx.state!=='running') await head.audioCtx.resume().catch(console.warn);
-  $loadLbl.textContent='Loading Kimi…';
-  await head.showAvatar({ url:'https://cdn.jsdelivr.net/gh/rikeshdahal/kimipack@main/kimi.glb', body:'F', avatarMood:'neutral' }, ev => {
-    if(ev?.lengthComputable) setLoadPct((ev.loaded/ev.total)*100,'Loading '+Math.round(ev.loaded/ev.total*100)+'%');
-  });
-  avatarReady = true;
+  if (avatarInited && avatarReady) return;
+  if (!avatarInited) {
+    head = new TalkingHead(document.getElementById('call-avatar-el'), { 
+      ttsEndpoint: 'N/A', lipsyncModules: ['en'], cameraView: 'upper', mixerGainSpeech: 2.5, cameraRotateEnable: false 
+    });
+    window._head = head;
+    avatarInited = true;
+  }
+  if (head.audioCtx.state !== 'running') await head.audioCtx.resume().catch(console.warn);
+  $loadLbl.textContent = 'Loading Kimi…';
+  if (!avatarReady) {
+    await head.showAvatar({ url: 'https://cdn.jsdelivr.net/gh/rikeshdahal/kimipack@main/kimi.glb', body: 'F', avatarMood: 'neutral' }, ev => {
+      if (ev?.lengthComputable) setLoadPct((ev.loaded / ev.total) * 100, 'Loading ' + Math.round(ev.loaded / ev.total * 100) + '%');
+    });
+    avatarReady = true;
+  }
 }
 
 function startCallTimer() {
